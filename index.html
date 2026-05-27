@@ -811,11 +811,16 @@ async function handleScan(e) {
   e.target.value = '';
 
   const statusEl = document.getElementById('scan-status');
-  statusEl.innerHTML = '<div class="scan-loading"><div class="spinner"></div><span>Reading GRN label with AI...</span></div>';
+  statusEl.innerHTML = '<div class="scan-loading"><div class="spinner"></div><span>Compressing image...</span></div>';
 
   try {
-    const b64 = await fileToB64(file);
-    const result = await callAnthropicScan(b64, file.type);
+    // Step 1: compress image (resize + jpeg quality 0.80)
+    const b64 = await compressImage(file);
+
+    statusEl.innerHTML = '<div class="scan-loading"><div class="spinner"></div><span>Reading GRN label with AI...</span></div>';
+
+    // Step 2: send to proxy
+    const result = await callAnthropicScan(b64, 'image/jpeg');
 
     if (result && (result.itemNo || result.itemDesc || result.lotNo)) {
       scanned = result;
@@ -846,27 +851,59 @@ function setScanned(valId, rowId, value) {
   }
 }
 
-function fileToB64(file) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result.split(',')[1]);
-    r.onerror = rej;
-    r.readAsDataURL(file);
+// Compress image: resize to max 1400px wide, JPEG quality 0.80
+// This shrinks 5MB phone photos to ~300KB so Apps Script can handle them reliably
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX_W = 1400;
+        let w = img.width;
+        let h = img.height;
+        if (w > MAX_W) {
+          h = Math.round(h * MAX_W / w);
+          w = MAX_W;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
+        resolve(dataUrl.split(',')[1]);
+      };
+      img.onerror = () => reject(new Error('Could not load image'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
   });
 }
 
 async function callAnthropicScan(b64, mediaType) {
-  const res = await fetch(cfg.proxyUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ imageBase64: b64, mediaType: mediaType })
-  });
+  let res;
+  try {
+    res = await fetch(cfg.proxyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ imageBase64: b64, mediaType: mediaType }),
+      redirect: 'follow'
+    });
+  } catch(err) {
+    throw new Error('Network error – check internet connection');
+  }
 
-  if (!res.ok) throw new Error(`Proxy error: ${res.status}`);
+  if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
-  const json = await res.json();
+  let json;
+  try {
+    json = await res.json();
+  } catch(err) {
+    throw new Error('Invalid response from server');
+  }
+
   if (!json.success) throw new Error(json.error || 'Proxy returned error');
-
   return json.data;
 }
 
