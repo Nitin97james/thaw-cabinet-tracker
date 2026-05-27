@@ -10,7 +10,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     :root {
       --red: #CC0000;
@@ -268,11 +267,6 @@
     .modal-close { background: var(--surface2); border: none; border-radius: 50%; width: 32px; height: 32px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
     /* ── SETUP ────────────────────────────────── */
-    .setup-hero { background: var(--red); color: #fff; padding: 40px 20px 32px; text-align: center; }
-    .setup-icon { font-size: 52px; margin-bottom: 12px; }
-    .setup-title { font-size: 22px; font-weight: 800; }
-    .setup-sub { font-size: 14px; opacity: 0.75; margin-top: 6px; }
-    .cfg-section { font-size: 12px; font-weight: 800; color: var(--red); text-transform: uppercase; letter-spacing: 0.8px; margin: 18px 0 10px; }
 
     /* ── DIVIDER ──────────────────────────────── */
     .divider { height: 1px; background: var(--border); margin: 18px 0; }
@@ -307,33 +301,6 @@
     .tag-blue  { background: var(--blue-light); color: var(--blue); }
     .tag-green { background: var(--green-light); color: var(--green); }
 
-    /* ── QR MODAL ─────────────────────────────── */
-    .qr-modal-overlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,0.6); z-index: 300;
-      align-items: center; justify-content: center; padding: 20px;
-    }
-    .qr-modal-overlay.open { display: flex; }
-    .qr-modal {
-      background: #fff; border-radius: 20px;
-      padding: 28px 24px; width: 100%; max-width: 340px;
-      text-align: center; box-shadow: var(--shadow-lg);
-    }
-    .qr-modal h3 { font-size: 18px; font-weight: 800; margin-bottom: 6px; }
-    .qr-modal p  { font-size: 13px; color: var(--text2); margin-bottom: 20px; line-height: 1.4; }
-    #qr-canvas   { margin: 0 auto 20px; }
-    #qr-canvas img, #qr-canvas canvas { border-radius: 8px; }
-
-    /* ── SCAN CONFIG ──────────────────────────── */
-    .scan-cfg-btn {
-      background: var(--blue-light); border: 2px solid #93C5FD;
-      color: var(--blue); border-radius: var(--radius);
-      padding: 14px 20px; display: flex; align-items: center;
-      gap: 10px; cursor: pointer; width: 100%; font-family: inherit;
-      font-size: 15px; font-weight: 700; min-height: 52px;
-      margin-bottom: 14px; transition: all 0.12s;
-    }
-    .scan-cfg-btn:active { background: #DBEAFE; transform: scale(0.98); }
     .gap-sm  { height: 10px; }
     .gap-md  { height: 18px; }
     .footer-note { text-align: center; font-size: 12px; color: var(--text3); padding-top: 8px; }
@@ -345,56 +312,6 @@
 <!-- ============================================================
      SETUP VIEW
 ============================================================ -->
-<div id="view-setup" class="view active">
-  <div class="setup-hero">
-    <div class="setup-icon">🧊</div>
-    <div class="setup-title">Thaw Cabinet Tracker</div>
-    <div class="setup-sub">Set up this device to get started</div>
-  </div>
-  <div class="content" style="padding-top:20px;">
-
-    <div id="cfg-scan-status" style="margin-bottom:12px;"></div>
-
-    <div class="card">
-      <div class="cfg-section">Anthropic API</div>
-      <div class="form-group">
-        <label class="form-label">API Key</label>
-        <input type="password" id="cfg-anthropic" class="form-input" placeholder="sk-ant-api03-...">
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="cfg-section">Firebase Configuration</div>
-      <div class="form-group">
-        <label class="form-label">API Key</label>
-        <input type="text" id="cfg-fb-apikey" class="form-input" placeholder="AIzaSy...">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Auth Domain</label>
-        <input type="text" id="cfg-fb-authdomain" class="form-input" placeholder="your-app.firebaseapp.com">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Project ID</label>
-        <input type="text" id="cfg-fb-projectid" class="form-input" placeholder="your-project-id">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Storage Bucket</label>
-        <input type="text" id="cfg-fb-storagebucket" class="form-input" placeholder="your-app.appspot.com">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Messaging Sender ID</label>
-        <input type="text" id="cfg-fb-senderid" class="form-input" placeholder="123456789012">
-      </div>
-      <div class="form-group" style="margin-bottom:0;">
-        <label class="form-label">App ID</label>
-        <input type="text" id="cfg-fb-appid" class="form-input" placeholder="1:123:web:abc123">
-      </div>
-    </div>
-
-    <button class="btn btn-primary" onclick="saveConfig()">🚀 Save & Launch</button>
-  </div>
-</div>
-
 <!-- ============================================================
      HOME VIEW
 ============================================================ -->
@@ -688,24 +605,6 @@
 
     <div class="divider"></div>
     <button class="btn btn-primary" onclick="saveSettings()" style="margin-bottom:10px;">Save Settings</button>
-
-    <div class="divider"></div>
-    <div style="font-size:13px; font-weight:700; color:var(--text2); margin-bottom:10px;">📱 Add New Device</div>
-    <div style="font-size:13px; color:var(--text2); margin-bottom:12px; line-height:1.4;">Generate a QR code for new devices. Scan it to set up instantly — no typing needed.</div>
-    <button class="btn btn-outline" onclick="showCfgQR()" style="margin-bottom:10px;">📷 Show Config QR Code</button>
-
-    <div class="divider"></div>
-    <button class="btn btn-ghost" onclick="doResetConfig()" style="font-size:14px; min-height:42px; color:var(--text3);">Reset Config (Re-setup)</button>
-  </div>
-</div>
-
-<!-- QR Modal -->
-<div class="qr-modal-overlay" id="qr-modal">
-  <div class="qr-modal">
-    <h3>📱 Add New Device</h3>
-    <p>On the new device, open the <strong>phone camera</strong> (no app needed) and point it at this QR code. It will open the app with all settings pre-filled automatically.</p>
-    <div id="qr-canvas"></div>
-    <button class="btn btn-ghost" onclick="closeQR()" style="min-height:44px; font-size:15px;">Close</button>
   </div>
 </div>
 
@@ -746,25 +645,25 @@ let currentCabinet = null;
 let scanned = {itemNo:'', itemDesc:'', lotNo:''};
 
 // ── INIT ───────────────────────────────────────────────────────
+// ── HARDCODED CONFIG ───────────────────────────────────────────
+cfg = {
+  anthropicKey: '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',
+  fbConfig: {
+    apiKey:            'AIzaSyDr0jU3yOBVx6Gl5z_ECw8qvUF0a7bXuyU',
+    authDomain:        'taiko-thaw-cabinet.firebaseapp.com',
+    projectId:         'taiko-thaw-cabinet',
+    storageBucket:     'taiko-thaw-cabinet.firebasestorage.app',
+    messagingSenderId: '793395586974',
+    appId:             '1:793395586974:web:adc1f2978f57325030d88f',
+  }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   buildCabinetGrids();
   buildLiveDropdown();
+  initFirebase();
+  showView('home');
 
-  // First check if URL contains config from QR scan
-  if (checkUrlConfig()) return;
-
-  const savedCfg = localStorage.getItem('thaw_cfg');
-  if (savedCfg) {
-    try {
-      cfg = JSON.parse(savedCfg);
-      initFirebase();
-      showView('home');
-    } catch { showView('setup'); }
-  } else {
-    showView('setup');
-  }
-
-  // Load Teams URL if saved
   const teamsUrl = localStorage.getItem('thaw_teams_url') || '';
   if (teamsUrl) {
     document.getElementById('cfg-teams-url').value = teamsUrl;
@@ -772,42 +671,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// ── CONFIG & FIREBASE ──────────────────────────────────────────
-function saveConfig() {
-  const ak = v('cfg-anthropic');
-  const fbConfig = {
-    apiKey:            v('cfg-fb-apikey'),
-    authDomain:        v('cfg-fb-authdomain'),
-    projectId:         v('cfg-fb-projectid'),
-    storageBucket:     v('cfg-fb-storagebucket'),
-    messagingSenderId: v('cfg-fb-senderid'),
-    appId:             v('cfg-fb-appid'),
-  };
-  if (!ak || !fbConfig.apiKey || !fbConfig.projectId) {
-    toast('Please fill in Anthropic key + Firebase details');
-    return;
-  }
-  cfg = {anthropicKey: ak, fbConfig};
-  localStorage.setItem('thaw_cfg', JSON.stringify(cfg));
-  initFirebase();
-  showView('home');
-  toast('Configuration saved ✓');
-}
-
+// ── FIREBASE ───────────────────────────────────────────────────
 function initFirebase() {
   try {
     if (!firebase.apps.length) firebase.initializeApp(cfg.fbConfig);
     db = firebase.firestore();
   } catch(e) {
     console.error(e);
-    toast('Firebase init error – check config');
+    toast('Firebase connection error');
   }
-}
-
-function doResetConfig() {
-  if (!confirm('Reset all config? You will need to re-enter all details.')) return;
-  localStorage.removeItem('thaw_cfg');
-  location.reload();
 }
 
 // ── SETTINGS ───────────────────────────────────────────────────
@@ -829,8 +701,6 @@ function openTeams() {
   const url = localStorage.getItem('thaw_teams_url');
   if (url) window.open(url, '_blank');
 }
-
-// Close modal when clicking overlay
 document.getElementById('settings-modal').addEventListener('click', function(e) {
   if (e.target === this) closeSettings();
 });
@@ -1334,82 +1204,6 @@ async function downloadExcel() {
   btn.disabled = false;
 }
 
-// ── CONFIG QR CODE (URL-based) ─────────────────────────────────
-function showCfgQR() {
-  if (!cfg.anthropicKey) { toast('No config saved yet'); return; }
-
-  // Encode config as base64 and append to app URL as a parameter
-  const payload = {
-    a: cfg.anthropicKey,
-    f: cfg.fbConfig,
-    t: localStorage.getItem('thaw_teams_url') || ''
-  };
-  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-
-  // Build the full URL — when scanned, phone opens app with config pre-filled
-  const appUrl = window.location.origin + window.location.pathname + '?cfg=' + encoded;
-
-  // Clear previous QR
-  const canvas = document.getElementById('qr-canvas');
-  canvas.innerHTML = '';
-
-  // Generate QR code encoding the full URL
-  new QRCode(canvas, {
-    text: appUrl,
-    width: 240,
-    height: 240,
-    colorDark: '#111111',
-    colorLight: '#ffffff',
-    correctLevel: QRCode.CorrectLevel.M
-  });
-
-  closeSettings();
-  document.getElementById('qr-modal').classList.add('open');
-}
-
-function closeQR() {
-  document.getElementById('qr-modal').classList.remove('open');
-}
-
-// Close QR modal on overlay click
-document.getElementById('qr-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeQR();
-});
-
-// ── AUTO-LOAD CONFIG FROM URL PARAM ───────────────────────────
-// Called on page load — if URL contains ?cfg=... (from QR scan),
-// decode and save config automatically, then launch app
-function checkUrlConfig() {
-  const params = new URLSearchParams(window.location.search);
-  const encoded = params.get('cfg');
-  if (!encoded) return false;
-
-  try {
-    const decoded = decodeURIComponent(escape(atob(encoded)));
-    const parsed = JSON.parse(decoded);
-
-    if (!parsed.a || !parsed.f || !parsed.f.projectId) throw new Error('Invalid');
-
-    cfg = { anthropicKey: parsed.a, fbConfig: parsed.f };
-    localStorage.setItem('thaw_cfg', JSON.stringify(cfg));
-    if (parsed.t) localStorage.setItem('thaw_teams_url', parsed.t);
-
-    // Clean URL (remove ?cfg= param)
-    window.history.replaceState({}, '', window.location.pathname);
-
-    // Show success message briefly then launch
-    const statusEl = document.getElementById('cfg-scan-status');
-    if (statusEl) statusEl.innerHTML = '<div class="alert alert-ok">✓ Config loaded! Launching...</div>';
-
-    initFirebase();
-    setTimeout(() => showView('home'), 900);
-    return true;
-
-  } catch(e) {
-    console.error('URL config parse error:', e);
-    return false;
-  }
-}
 
 function v(id)          { return (document.getElementById(id)?.value || '').trim(); }
 function toInputDate(d) { return d.toISOString().split('T')[0]; }
