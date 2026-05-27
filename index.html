@@ -858,7 +858,7 @@ function fileToB64(file) {
 async function callAnthropicScan(b64, mediaType) {
   const res = await fetch(cfg.proxyUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ imageBase64: b64, mediaType: mediaType })
   });
 
