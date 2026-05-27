@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Thaw Cabinet Tracker · Taiko</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --red: #CC0000;
+      --red-dark: #A30000;
+      --red-light: #FFF0F0;
+      --green: #1A6B2E;
+      --green-light: #EDFBF2;
+      --amber: #B45309;
+      --amber-light: #FFFBEB;
+      --blue: #1D4ED8;
+      --blue-light: #EFF6FF;
+      --bg: #F3F3F3;
+      --surface: #FFFFFF;
+      --surface2: #F8F8F8;
+      --border: #E4E4E4;
+      --border2: #D0D0D0;
+      --text: #111111;
+      --text2: #555555;
+      --text3: #999999;
+      --radius: 14px;
+      --radius-sm: 8px;
+      --shadow: 0 2px 12px rgba(0,0,0,0.07);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overscroll-behavior: none;
+    }
+
+    /* ── VIEWS ────────────────────────────────── */
+    .view { display: none; min-height: 100vh; padding-bottom: 32px; }
+    .view.active { display: block; }
+
+    /* ── TOPBAR ───────────────────────────────── */
+    .topbar {
+      background: var(--red);
+      color: #fff;
+      padding: 0 16px;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 10px rgba(180,0,0,0.3);
+    }
+    .topbar-icon { font-size: 22px; background: none; border: none; color: #fff; cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0; transition: background 0.15s; }
+    .topbar-icon:active { background: rgba(255,255,255,0.18); }
+    .topbar-title { flex: 1; font-size: 17px; font-weight: 700; line-height: 1.2; }
+    .topbar-sub { font-size: 11px; font-weight: 400; opacity: 0.75; }
+
+    /* ── CONTENT ──────────────────────────────── */
+    .content { padding: 16px; max-width: 560px; margin: 0 auto; }
+
+    /* ── CARD ─────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+      border: 1px solid var(--border);
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title .badge {
+      background: var(--red);
+      color: #fff;
+      padding: 2px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .card-title .badge.out { background: var(--green); }
+
+    /* ── BUTTONS ──────────────────────────────── */
+    .btn {
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; padding: 0 20px; border-radius: var(--radius);
+      font-family: inherit; font-size: 16px; font-weight: 700;
+      cursor: pointer; border: none; transition: all 0.12s;
+      min-height: 52px; width: 100%; letter-spacing: -0.1px;
+    }
+    .btn:active { transform: scale(0.975); }
+    .btn-primary { background: var(--red); color: #fff; box-shadow: 0 4px 14px rgba(204,0,0,0.3); }
+    .btn-primary:active { background: var(--red-dark); }
+    .btn-outline { background: #fff; color: var(--red); border: 2px solid var(--red); }
+    .btn-green { background: var(--green); color: #fff; box-shadow: 0 4px 14px rgba(26,107,46,0.25); }
+    .btn-ghost { background: var(--surface2); color: var(--text2); border: 1.5px solid var(--border); }
+
+    /* ── FORM ─────────────────────────────────── */
+    .form-group { margin-bottom: 14px; }
+    .form-label {
+      display: block; font-size: 12px; font-weight: 700;
+      color: var(--text3); margin-bottom: 5px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .form-input {
+      width: 100%; padding: 11px 13px;
+      border: 1.5px solid var(--border2); border-radius: var(--radius-sm);
+      font-family: inherit; font-size: 16px; color: var(--text);
+      background: var(--surface); transition: border-color 0.15s;
+      appearance: none; -webkit-appearance: none;
+    }
+    .form-input:focus { outline: none; border-color: var(--red); }
+    .form-input:disabled, .form-input[readonly] {
+      background: var(--surface2); color: var(--text2);
+      cursor: not-allowed; border-color: var(--border);
+    }
+    .form-input.warn { border-color: #F59E0B; }
+    .form-input.err  { border-color: #DC2626; }
+    select.form-input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
+
+    /* ── INLINE MSGS ──────────────────────────── */
+    .msg { font-size: 13px; margin-top: 5px; display: flex; align-items: flex-start; gap: 5px; }
+    .msg-warn  { color: var(--amber); }
+    .msg-err   { color: #DC2626; }
+    .msg-ok    { color: var(--green); }
+    .msg-info  { color: var(--text2); }
+
+    .alert {
+      padding: 11px 14px; border-radius: var(--radius-sm);
+      font-size: 14px; margin-bottom: 12px;
+      display: flex; align-items: flex-start; gap: 8px; line-height: 1.4;
+    }
+    .alert-warn { background: var(--amber-light); border: 1px solid #FCD34D; color: var(--amber); }
+    .alert-err  { background: #FEF2F2; border: 1px solid #FCA5A5; color: #991B1B; }
+    .alert-ok   { background: var(--green-light); border: 1px solid #86EFAC; color: var(--green); }
+
+    /* ── HOME ─────────────────────────────────── */
+    .home-hero {
+      background: var(--red);
+      padding: 36px 20px 28px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .home-hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(255,255,255,0.03) 20px, rgba(255,255,255,0.03) 40px);
+    }
+    .home-hero-icon { font-size: 52px; margin-bottom: 10px; position: relative; }
+    .home-hero-title { color: #fff; font-size: 24px; font-weight: 800; position: relative; letter-spacing: -0.5px; }
+    .home-hero-sub { color: rgba(255,255,255,0.7); font-size: 13px; margin-top: 4px; position: relative; }
+
+    .home-btn {
+      min-height: 76px; border-radius: 16px; gap: 14px;
+      justify-content: flex-start; padding: 0 20px;
+    }
+    .home-btn-icon { font-size: 30px; width: 48px; text-align: center; flex-shrink: 0; }
+    .home-btn-text { text-align: left; }
+    .home-btn-title { font-size: 18px; font-weight: 800; display: block; }
+    .home-btn-desc { font-size: 12px; font-weight: 500; opacity: 0.7; display: block; margin-top: 1px; }
+
+    /* ── CABINET GRID ─────────────────────────── */
+    .cabinet-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+    .cabinet-btn {
+      background: var(--surface); border: 1.5px solid var(--border2);
+      border-radius: var(--radius-sm); padding: 14px 6px; text-align: center;
+      cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700;
+      color: var(--text2); transition: all 0.12s; line-height: 1.2;
+    }
+    .cabinet-btn:active { background: var(--red-light); border-color: var(--red); color: var(--red); transform: scale(0.97); }
+    .cabinet-btn .cb-num { font-size: 20px; font-weight: 800; color: var(--text); display: block; margin-bottom: 2px; }
+    .cabinet-btn.room { border-color: #93C5FD; color: var(--blue); background: var(--blue-light); }
+    .cabinet-btn.room .cb-num { color: var(--blue); }
+    .cabinet-btn.room:active { background: #DBEAFE; border-color: var(--blue); }
+
+    /* ── GRN SCAN ─────────────────────────────── */
+    .scan-btn {
+      background: linear-gradient(135deg, #111 0%, var(--red-dark) 100%);
+      color: #fff; border: none; border-radius: var(--radius);
+      padding: 16px 20px; display: flex; align-items: center;
+      gap: 12px; cursor: pointer; width: 100%; min-height: 62px;
+      font-family: inherit; transition: opacity 0.15s;
+    }
+    .scan-btn:active { opacity: 0.88; transform: scale(0.98); }
+    .scan-btn-icon { font-size: 28px; flex-shrink: 0; }
+    .scan-btn-text { text-align: left; }
+    .scan-btn-title { font-size: 16px; font-weight: 800; color: #fff; display: block; }
+    .scan-btn-sub { font-size: 12px; color: rgba(255,255,255,0.65); display: block; margin-top: 1px; }
+
+    .scanned-block { margin-top: 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+    .scanned-row { padding: 10px 13px; display: flex; align-items: flex-start; gap: 10px; border-bottom: 1px solid var(--border); }
+    .scanned-row:last-child { border-bottom: none; }
+    .scanned-row.filled { background: var(--green-light); border-color: #86EFAC; }
+    .scanned-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text3); min-width: 70px; margin-top: 2px; flex-shrink: 0; }
+    .scanned-value { font-size: 15px; font-weight: 600; color: var(--text); font-family: 'DM Mono', monospace; word-break: break-all; }
+    .scanned-value.empty { color: var(--text3); font-style: italic; font-weight: 400; font-family: 'DM Sans', sans-serif; font-size: 13px; }
+
+    /* ── SCAN LOADING ─────────────────────────── */
+    .scan-loading { display: flex; align-items: center; gap: 10px; padding: 12px 0; font-size: 14px; color: var(--text2); }
+    .spinner { width: 18px; height: 18px; border: 2.5px solid var(--border); border-top-color: var(--red); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── SUGGESTION TAG ───────────────────────── */
+    .suggestion-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--green-light); border: 1px solid #86EFAC;
+      color: var(--green); border-radius: 20px;
+      padding: 3px 10px; font-size: 12px; font-weight: 700; margin-top: 5px;
+    }
+
+    /* ── LIVE TABLE ───────────────────────────── */
+    .table-wrap { overflow-x: auto; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 4px; }
+    .live-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .live-table th { background: var(--red); color: #fff; padding: 9px 10px; text-align: left; font-size: 11px; font-weight: 700; white-space: nowrap; letter-spacing: 0.3px; }
+    .live-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+    .live-table tr:last-child td { border-bottom: none; }
+    .live-table tr:nth-child(even) td { background: var(--surface2); }
+    .temp-ok  { color: var(--green); font-weight: 700; }
+    .temp-bad { color: #DC2626; font-weight: 700; }
+    .temp-warn { color: var(--amber); font-weight: 700; }
+
+    /* ── SUCCESS ──────────────────────────────── */
+    .success-body { text-align: center; padding: 40px 20px 24px; }
+    .success-check { font-size: 68px; margin-bottom: 12px; animation: pop 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+    @keyframes pop { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .success-title { font-size: 26px; font-weight: 800; color: var(--green); letter-spacing: -0.5px; }
+    .success-sub { font-size: 14px; color: var(--text2); margin-top: 6px; line-height: 1.4; }
+
+    /* ── SETTINGS SHEET ───────────────────────── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45); z-index: 200;
+      align-items: flex-end; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-sheet {
+      background: #fff; border-radius: 20px 20px 0 0;
+      padding: 20px; width: 100%; max-width: 560px;
+      max-height: 85vh; overflow-y: auto;
+    }
+    .modal-handle { width: 40px; height: 4px; background: var(--border2); border-radius: 2px; margin: 0 auto 20px; }
+    .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
+    .modal-close { background: var(--surface2); border: none; border-radius: 50%; width: 32px; height: 32px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+    /* ── SETUP ────────────────────────────────── */
+    .setup-hero { background: var(--red); color: #fff; padding: 40px 20px 32px; text-align: center; }
+    .setup-icon { font-size: 52px; margin-bottom: 12px; }
+    .setup-title { font-size: 22px; font-weight: 800; }
+    .setup-sub { font-size: 14px; opacity: 0.75; margin-top: 6px; }
+    .cfg-section { font-size: 12px; font-weight: 800; color: var(--red); text-transform: uppercase; letter-spacing: 0.8px; margin: 18px 0 10px; }
+
+    /* ── DIVIDER ──────────────────────────────── */
+    .divider { height: 1px; background: var(--border); margin: 18px 0; }
+
+    /* ── TOAST ────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: #111; color: #fff; padding: 11px 22px;
+      border-radius: 100px; font-size: 14px; font-weight: 600;
+      z-index: 999; opacity: 0; transition: opacity 0.25s; white-space: nowrap;
+      box-shadow: var(--shadow-lg); pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+
+    /* ── SETTINGS GEAR ────────────────────────── */
+    .fab {
+      position: fixed; bottom: 22px; right: 18px;
+      background: var(--text2); color: #fff; border: none;
+      border-radius: 50%; width: 46px; height: 46px;
+      font-size: 20px; cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      box-shadow: var(--shadow-lg); z-index: 50;
+    }
+    .fab:active { transform: scale(0.92); }
+
+    /* ── TAG ──────────────────────────────────── */
+    .tag {
+      display: inline-block; padding: 3px 9px; border-radius: 20px;
+      font-size: 11px; font-weight: 700;
+    }
+    .tag-red   { background: var(--red-light); color: var(--red); }
+    .tag-blue  { background: var(--blue-light); color: var(--blue); }
+    .tag-green { background: var(--green-light); color: var(--green); }
+
+    /* ── MISC ─────────────────────────────────── */
+    .gap-sm  { height: 10px; }
+    .gap-md  { height: 18px; }
+    .footer-note { text-align: center; font-size: 12px; color: var(--text3); padding-top: 8px; }
+    .prog-info { font-size: 12px; color: var(--text3); margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================
+     SETUP VIEW
+============================================================ -->
+<div id="view-setup" class="view active">
+  <div class="setup-hero">
+    <div class="setup-icon">🧊</div>
+    <div class="setup-title">Thaw Cabinet Tracker</div>
+    <div class="setup-sub">Enter configuration to get started</div>
+  </div>
+  <div class="content" style="padding-top:20px;">
+
+    <div class="card">
+      <div class="cfg-section">Anthropic API</div>
+      <div class="form-group">
+        <label class="form-label">API Key</label>
+        <input type="password" id="cfg-anthropic" class="form-input" placeholder="sk-ant-api03-...">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="cfg-section">Firebase Configuration</div>
+      <div class="form-group">
+        <label class="form-label">API Key</label>
+        <input type="text" id="cfg-fb-apikey" class="form-input" placeholder="AIzaSy...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Auth Domain</label>
+        <input type="text" id="cfg-fb-authdomain" class="form-input" placeholder="your-app.firebaseapp.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Project ID</label>
+        <input type="text" id="cfg-fb-projectid" class="form-input" placeholder="your-project-id">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Storage Bucket</label>
+        <input type="text" id="cfg-fb-storagebucket" class="form-input" placeholder="your-app.appspot.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Messaging Sender ID</label>
+        <input type="text" id="cfg-fb-senderid" class="form-input" placeholder="123456789012">
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">App ID</label>
+        <input type="text" id="cfg-fb-appid" class="form-input" placeholder="1:123:web:abc123">
+      </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="saveConfig()">🚀 Save & Launch</button>
+  </div>
+</div>
+
+<!-- ============================================================
+     HOME VIEW
+============================================================ -->
+<div id="view-home" class="view">
+  <div class="home-hero">
+    <div class="home-hero-icon">🧊</div>
+    <div class="home-hero-title">Thaw Cabinet Tracker</div>
+    <div class="home-hero-sub">QA Defrost Record · QA140-8a</div>
+  </div>
+  <div class="content" style="padding-top:20px;">
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <button class="btn btn-primary home-btn" onclick="showView('select')">
+        <span class="home-btn-icon">📋</span>
+        <span class="home-btn-text">
+          <span class="home-btn-title">New Entry</span>
+          <span class="home-btn-desc">Record a new defrost entry</span>
+        </span>
+      </button>
+      <button class="btn btn-outline home-btn" onclick="goLiveSheet()">
+        <span class="home-btn-icon">📊</span>
+        <span class="home-btn-text">
+          <span class="home-btn-title">Live Sheet</span>
+          <span class="home-btn-desc">View records & download Excel</span>
+        </span>
+      </button>
+    </div>
+    <div class="divider"></div>
+    <div class="footer-note">Taiko Foods · Warehouse QA</div>
+  </div>
+  <button class="fab" onclick="openSettings()" title="Settings">⚙️</button>
+</div>
+
+<!-- ============================================================
+     SELECT CABINET VIEW
+============================================================ -->
+<div id="view-select" class="view">
+  <div class="topbar">
+    <button class="topbar-icon" onclick="showView('home')">←</button>
+    <div class="topbar-title">Select Cabinet / Room</div>
+  </div>
+  <div class="content" style="padding-top:16px;">
+    <div class="card">
+      <div class="card-title">Thaw Cabinets <span class="badge">1 – 18</span></div>
+      <div class="cabinet-grid" id="cabinet-grid"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Thawing Rooms <span class="badge out">1 – 3</span></div>
+      <div class="cabinet-grid" id="room-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     ENTRY VIEW
+============================================================ -->
+<div id="view-entry" class="view">
+  <div class="topbar">
+    <button class="topbar-icon" onclick="showView('home')">🏠</button>
+    <div>
+      <div class="topbar-title" id="entry-title">Thaw Cabinet 1</div>
+      <div class="topbar-sub">New Defrost Entry</div>
+    </div>
+  </div>
+  <div class="content" style="padding-top:16px;">
+
+    <!-- IN CARD -->
+    <div class="card">
+      <div class="card-title">IN Details <span class="badge">IN</span></div>
+
+      <div class="form-group">
+        <label class="form-label">Date In</label>
+        <input type="date" id="field-date-in" class="form-input">
+      </div>
+
+      <!-- GRN Scanner -->
+      <div class="form-group">
+        <label class="form-label">GRN Label Scan</label>
+        <button class="scan-btn" onclick="triggerScan()" id="scan-btn">
+          <span class="scan-btn-icon">📷</span>
+          <span class="scan-btn-text">
+            <span class="scan-btn-title">Scan GRN Label</span>
+            <span class="scan-btn-sub">Tap to open camera</span>
+          </span>
+        </button>
+        <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none;" onchange="handleScan(event)">
+        <div id="scan-status"></div>
+        <div class="scanned-block">
+          <div class="scanned-row" id="row-itemno">
+            <span class="scanned-label">Item No.</span>
+            <span class="scanned-value empty" id="val-itemno">Not scanned</span>
+          </div>
+          <div class="scanned-row" id="row-itemdesc">
+            <span class="scanned-label">Item Desc.</span>
+            <span class="scanned-value empty" id="val-itemdesc">Not scanned</span>
+          </div>
+          <div class="scanned-row" id="row-lotno">
+            <span class="scanned-label">Lot No.</span>
+            <span class="scanned-value empty" id="val-lotno">Not scanned</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Quantity In (Kg)</label>
+        <input type="number" id="field-qty-in" class="form-input" placeholder="e.g. 80" step="0.1" min="0" oninput="onQtyInChange()">
+        <div id="msg-maxload"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Temp Before Defrosting (°C)</label>
+        <input type="number" id="field-temp-in" class="form-input" placeholder="e.g. -18.5" step="0.1" oninput="onTempInChange()">
+        <div id="msg-tempin"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Defrost Start Time</label>
+        <input type="time" id="field-time-in" class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Program Used</label>
+        <select id="field-program" class="form-input">
+          <option value="">– Select –</option>
+        </select>
+        <div id="msg-program"></div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Employee Name (In)</label>
+        <input type="text" id="field-emp-in" class="form-input" placeholder="Name of person who loaded">
+      </div>
+    </div>
+
+    <!-- OUT CARD -->
+    <div class="card">
+      <div class="card-title">OUT Details <span class="badge out">OUT</span></div>
+
+      <div class="form-group">
+        <label class="form-label">Date Out of Defrost Chiller</label>
+        <input type="date" id="field-date-out" class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">End of Defrost Time</label>
+        <input type="time" id="field-time-out" class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Quantity Out (Kg)</label>
+        <input type="number" id="field-qty-out" class="form-input" placeholder="e.g. 80" step="0.1" min="0">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Temp After Defrosting (°C)</label>
+        <input type="number" id="field-temp-out" class="form-input" placeholder="e.g. 2.5" step="0.1" oninput="onTempOutChange()">
+        <div id="msg-tempout"></div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Employee Name (Out)</label>
+        <input type="text" id="field-emp-out" class="form-input" placeholder="Name of person who removed product">
+      </div>
+    </div>
+
+    <div id="submit-alert"></div>
+    <button class="btn btn-primary" id="submit-btn" onclick="submitEntry()">
+      Submit Entry
+    </button>
+    <div class="gap-md"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SUCCESS VIEW
+============================================================ -->
+<div id="view-success" class="view">
+  <div class="topbar">
+    <button class="topbar-icon" onclick="showView('home')">🏠</button>
+    <div class="topbar-title">Entry Saved</div>
+  </div>
+  <div class="success-body">
+    <div class="success-check">✅</div>
+    <div class="success-title">Recorded!</div>
+    <div class="success-sub" id="success-sub"></div>
+  </div>
+  <div class="content">
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <button class="btn btn-primary" id="btn-next-entry" onclick="nextEntry()">
+        ＋ Next Entry for <span id="next-cab-name"></span>
+      </button>
+      <button class="btn btn-ghost" onclick="showView('select')">
+        Select Different Cabinet
+      </button>
+      <button class="btn btn-ghost" onclick="showView('home')">
+        🏠 Home
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     LIVE SHEET VIEW
+============================================================ -->
+<div id="view-live" class="view">
+  <div class="topbar">
+    <button class="topbar-icon" onclick="showView('home')">←</button>
+    <div class="topbar-title">Live Sheet</div>
+  </div>
+  <div class="content" style="padding-top:16px;">
+
+    <div class="card">
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Select Cabinet / Room</label>
+        <select id="live-select" class="form-input" onchange="loadLive()">
+          <option value="">– Select to view –</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="live-loading" style="display:none; text-align:center; padding:24px; color:var(--text3); font-size:14px;">
+      <div class="spinner" style="margin:0 auto 8px;"></div>
+      Loading entries...
+    </div>
+
+    <div id="live-content" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="font-size:13px; font-weight:700; color:var(--text2);">Last 7 days</div>
+        <div id="live-count" style="font-size:13px; color:var(--text3);"></div>
+      </div>
+      <div class="table-wrap">
+        <table class="live-table">
+          <thead>
+            <tr>
+              <th>Date In</th>
+              <th>Item No.</th>
+              <th>Item Desc.</th>
+              <th>Lot No.</th>
+              <th>Qty In</th>
+              <th>Temp In</th>
+              <th>Time In</th>
+              <th>Prog.</th>
+              <th>Emp. In</th>
+              <th>Date Out</th>
+              <th>Time Out</th>
+              <th>Qty Out</th>
+              <th>Temp Out</th>
+              <th>Emp. Out</th>
+            </tr>
+          </thead>
+          <tbody id="live-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="live-empty" style="display:none; text-align:center; padding:36px; color:var(--text3); font-size:14px;">
+      📭 No entries in the last 7 days
+    </div>
+
+    <div class="divider"></div>
+
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <button class="btn btn-green" onclick="downloadExcel()" id="btn-download">
+        ⬇️ Download Full Excel
+      </button>
+      <button class="btn btn-ghost" id="btn-teams" onclick="openTeams()" style="display:none;">
+        🔗 Open in Teams
+      </button>
+    </div>
+    <div class="gap-sm"></div>
+    <div class="footer-note">Download → upload to your Teams channel to update the live file</div>
+    <div class="gap-md"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SETTINGS MODAL
+============================================================ -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">
+      Settings
+      <button class="modal-close" onclick="closeSettings()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Teams Excel File URL (optional)</label>
+      <input type="url" id="cfg-teams-url" class="form-input" placeholder="https://...sharepoint.com/...">
+      <div class="msg msg-info" style="margin-top:6px;">Paste your Excel file's Teams/SharePoint link. Enables "Open in Teams" button.</div>
+    </div>
+
+    <div class="divider"></div>
+    <button class="btn btn-primary" onclick="saveSettings()" style="margin-bottom:10px;">Save Settings</button>
+    <button class="btn btn-ghost" onclick="doResetConfig()" style="font-size:14px; min-height:42px; color:var(--text3);">Reset Config (Re-setup)</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ============================================================
+     JAVASCRIPT
+============================================================ -->
+<script>
+'use strict';
+
+// ── CONSTANTS ─────────────────────────────────────────────────
+const CABINETS = [
+  ...Array.from({length: 18}, (_, i) => ({
+    id: `cabinet-${i+1}`,
+    name: `Thaw Cabinet ${i+1}`,
+    sheetName: `Thaw Cabinet ${i+1}`,
+    type: 'cabinet',
+    num: i+1,
+  })),
+  {id:'room-1', name:'Room 1', sheetName:'Room 1', type:'room', num:1},
+  {id:'room-2', name:'Room 2', sheetName:'Room 2', type:'room', num:2},
+  {id:'room-3', name:'Room 3', sheetName:'Room 3', type:'room', num:3},
+];
+
+const PROG_INFO = {
+  P1: '12 hrs (Ramen/Noodle) or 11 hrs (Chicken Katsu)',
+  P2: '5 hrs (Chicken Goujons)',
+  P3: '9 hrs (Pulled Beef & Duck)',
+  P4: '12 hrs (Chicken varieties)',
+};
+
+// ── STATE ──────────────────────────────────────────────────────
+let db = null;
+let cfg = {};
+let currentCabinet = null;
+let scanned = {itemNo:'', itemDesc:'', lotNo:''};
+
+// ── INIT ───────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  buildCabinetGrids();
+  buildLiveDropdown();
+
+  const savedCfg = localStorage.getItem('thaw_cfg');
+  if (savedCfg) {
+    try {
+      cfg = JSON.parse(savedCfg);
+      initFirebase();
+      showView('home');
+    } catch { showView('setup'); }
+  } else {
+    showView('setup');
+  }
+
+  // Load Teams URL if saved
+  const teamsUrl = localStorage.getItem('thaw_teams_url') || '';
+  if (teamsUrl) {
+    document.getElementById('cfg-teams-url').value = teamsUrl;
+    document.getElementById('btn-teams').style.display = 'flex';
+  }
+});
+
+// ── CONFIG & FIREBASE ──────────────────────────────────────────
+function saveConfig() {
+  const ak = v('cfg-anthropic');
+  const fbConfig = {
+    apiKey:            v('cfg-fb-apikey'),
+    authDomain:        v('cfg-fb-authdomain'),
+    projectId:         v('cfg-fb-projectid'),
+    storageBucket:     v('cfg-fb-storagebucket'),
+    messagingSenderId: v('cfg-fb-senderid'),
+    appId:             v('cfg-fb-appid'),
+  };
+  if (!ak || !fbConfig.apiKey || !fbConfig.projectId) {
+    toast('Please fill in Anthropic key + Firebase details');
+    return;
+  }
+  cfg = {anthropicKey: ak, fbConfig};
+  localStorage.setItem('thaw_cfg', JSON.stringify(cfg));
+  initFirebase();
+  showView('home');
+  toast('Configuration saved ✓');
+}
+
+function initFirebase() {
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(cfg.fbConfig);
+    db = firebase.firestore();
+  } catch(e) {
+    console.error(e);
+    toast('Firebase init error – check config');
+  }
+}
+
+function doResetConfig() {
+  if (!confirm('Reset all config? You will need to re-enter all details.')) return;
+  localStorage.removeItem('thaw_cfg');
+  location.reload();
+}
+
+// ── SETTINGS ───────────────────────────────────────────────────
+function openSettings() { document.getElementById('settings-modal').classList.add('open'); }
+function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
+function saveSettings() {
+  const url = document.getElementById('cfg-teams-url').value.trim();
+  if (url) {
+    localStorage.setItem('thaw_teams_url', url);
+    document.getElementById('btn-teams').style.display = 'flex';
+  } else {
+    localStorage.removeItem('thaw_teams_url');
+    document.getElementById('btn-teams').style.display = 'none';
+  }
+  closeSettings();
+  toast('Settings saved ✓');
+}
+function openTeams() {
+  const url = localStorage.getItem('thaw_teams_url');
+  if (url) window.open(url, '_blank');
+}
+
+// Close modal when clicking overlay
+document.getElementById('settings-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeSettings();
+});
+
+// ── NAVIGATION ─────────────────────────────────────────────────
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`view-${name}`).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ── GRIDS ──────────────────────────────────────────────────────
+function buildCabinetGrids() {
+  const cg = document.getElementById('cabinet-grid');
+  const rg = document.getElementById('room-grid');
+  CABINETS.filter(c => c.type === 'cabinet').forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'cabinet-btn';
+    b.innerHTML = `<span class="cb-num">${c.num}</span>Cabinet ${c.num}`;
+    b.onclick = () => selectCabinet(c);
+    cg.appendChild(b);
+  });
+  CABINETS.filter(c => c.type === 'room').forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'cabinet-btn room';
+    b.innerHTML = `<span class="cb-num">${c.num}</span>Room ${c.num}`;
+    b.onclick = () => selectCabinet(c);
+    rg.appendChild(b);
+  });
+}
+
+function buildLiveDropdown() {
+  const sel = document.getElementById('live-select');
+  const cg = document.createElement('optgroup'); cg.label = 'Thaw Cabinets';
+  CABINETS.filter(c=>c.type==='cabinet').forEach(c => {
+    const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; cg.appendChild(o);
+  });
+  sel.appendChild(cg);
+  const rg = document.createElement('optgroup'); rg.label = 'Thawing Rooms';
+  CABINETS.filter(c=>c.type==='room').forEach(c => {
+    const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; rg.appendChild(o);
+  });
+  sel.appendChild(rg);
+}
+
+// ── CABINET SELECTION ──────────────────────────────────────────
+function selectCabinet(cabinet) {
+  currentCabinet = cabinet;
+  document.getElementById('entry-title').textContent = cabinet.name;
+  document.getElementById('next-cab-name').textContent = cabinet.name;
+
+  // Build program options
+  const sel = document.getElementById('field-program');
+  sel.innerHTML = '<option value="">– Select –</option>';
+  if (cabinet.type === 'room') {
+    sel.innerHTML += '<option value="12 hrs">12 hrs</option>';
+    sel.value = '12 hrs';
+  } else {
+    ['P1','P2','P3','P4'].forEach(p => {
+      const o = document.createElement('option'); o.value = p; o.textContent = p; sel.appendChild(o);
+    });
+  }
+  document.getElementById('msg-program').innerHTML = '';
+
+  resetEntryForm();
+  showView('entry');
+}
+
+function resetEntryForm() {
+  scanned = {itemNo:'', itemDesc:'', lotNo:''};
+  ['val-itemno','val-itemdesc','val-lotno'].forEach(id => {
+    const el = document.getElementById(id);
+    el.textContent = 'Not scanned'; el.className = 'scanned-value empty';
+  });
+  ['row-itemno','row-itemdesc','row-lotno'].forEach(id => {
+    document.getElementById(id).classList.remove('filled');
+  });
+  document.getElementById('scan-status').innerHTML = '';
+  document.getElementById('field-qty-in').value = '';
+  document.getElementById('field-temp-in').value = '';
+  document.getElementById('field-time-in').value = '';
+  document.getElementById('field-qty-out').value = '';
+  document.getElementById('field-temp-out').value = '';
+  document.getElementById('field-time-out').value = '';
+  document.getElementById('field-emp-in').value = '';
+  document.getElementById('field-emp-out').value = '';
+  document.getElementById('msg-maxload').innerHTML = '';
+  document.getElementById('msg-tempin').innerHTML = '';
+  document.getElementById('msg-tempout').innerHTML = '';
+  document.getElementById('submit-alert').innerHTML = '';
+  document.getElementById('field-temp-in').className = 'form-input';
+  document.getElementById('field-temp-out').className = 'form-input';
+
+  // Dates: default Date In = yesterday, Date Out = today
+  const today = new Date();
+  const yesterday = new Date(today - 86400000);
+  document.getElementById('field-date-in').value = toInputDate(yesterday);
+  document.getElementById('field-date-out').value = toInputDate(today);
+}
+
+// ── SCANNING ───────────────────────────────────────────────────
+function triggerScan() { document.getElementById('camera-input').click(); }
+
+async function handleScan(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  const statusEl = document.getElementById('scan-status');
+  statusEl.innerHTML = '<div class="scan-loading"><div class="spinner"></div><span>Reading GRN label with AI...</span></div>';
+
+  try {
+    const b64 = await fileToB64(file);
+    const result = await callAnthropicScan(b64, file.type);
+
+    if (result && (result.itemNo || result.itemDesc || result.lotNo)) {
+      scanned = result;
+      setScanned('val-itemno', 'row-itemno', result.itemNo);
+      setScanned('val-itemdesc', 'row-itemdesc', result.itemDesc);
+      setScanned('val-lotno', 'row-lotno', result.lotNo);
+      statusEl.innerHTML = '<div class="msg msg-ok">✓ Label scanned successfully</div>';
+      autoSuggestProgram();
+      onQtyInChange();
+    } else {
+      statusEl.innerHTML = '<div class="msg msg-err">✗ Could not read label – please try again or check lighting</div>';
+    }
+  } catch(err) {
+    console.error(err);
+    statusEl.innerHTML = `<div class="msg msg-err">✗ Scan failed: ${err.message}</div>`;
+  }
+}
+
+function setScanned(valId, rowId, value) {
+  const el = document.getElementById(valId);
+  if (value) {
+    el.textContent = value;
+    el.className = 'scanned-value';
+    document.getElementById(rowId).classList.add('filled');
+  } else {
+    el.textContent = 'Not found';
+    el.className = 'scanned-value empty';
+  }
+}
+
+function fileToB64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+async function callAnthropicScan(b64, mediaType) {
+  const prompt = `This is a GRN (Goods Received Note) label from a food warehouse.
+Extract exactly these three fields:
+- Item No.: the short item code (e.g. S0091, C0143, F0057)
+- Lot No.: the GRN/lot number (often starts with GRN- followed by digits)
+- Item Desc.: the full item description text
+
+Reply with ONLY a JSON object, no markdown, no explanation:
+{"itemNo":"...","lotNo":"...","itemDesc":"..."}`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': cfg.anthropicKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 200,
+      messages: [{
+        role: 'user',
+        content: [
+          {type:'image', source:{type:'base64', media_type:mediaType, data:b64}},
+          {type:'text', text:prompt}
+        ]
+      }]
+    })
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`API ${res.status}: ${errText.slice(0,120)}`);
+  }
+  const data = await res.json();
+  const text = (data.content[0]?.text || '').trim().replace(/```json|```/g,'').trim();
+  return JSON.parse(text);
+}
+
+// ── PROGRAM SUGGESTION ─────────────────────────────────────────
+function autoSuggestProgram() {
+  if (currentCabinet?.type === 'room') return; // already set to 12 hrs
+
+  const suggestion = getSuggestedProgram(scanned.itemDesc);
+  const msgEl = document.getElementById('msg-program');
+  const sel = document.getElementById('field-program');
+
+  if (suggestion) {
+    sel.value = suggestion;
+    msgEl.innerHTML = `<div class="suggestion-tag">✓ Auto-suggested: ${suggestion} · ${PROG_INFO[suggestion]}</div>`;
+  } else {
+    msgEl.innerHTML = '<div class="msg msg-warn">⚠ No auto-suggestion – please select program manually</div>';
+  }
+}
+
+function getSuggestedProgram(itemDesc) {
+  const d = (itemDesc || '').toLowerCase();
+  if (d.includes('katsu'))                    return 'P1';
+  if (d.includes('noodle') || d.includes('ramen')) return 'P1';
+  if (d.includes('goujon'))                   return 'P2';
+  if (d.includes('duck') || d.includes('beef') || d.includes('pulled')) return 'P3';
+  if (d.includes('karaage') || d.includes('chicken') || d.includes('shawarma') ||
+      d.includes('pepper')  || d.includes('chili')   || d.includes('chilli')   ||
+      d.includes('smoky')   || d.includes('smokey')  || d.includes('steam')    ||
+      d.includes('shredded')|| d.includes('roasted') || d.includes('sliced')   ||
+      d.includes('upb'))                      return 'P4';
+  return null;
+}
+
+function getMaxLoad(itemDesc) {
+  const d = (itemDesc || '').toLowerCase();
+  if (d.includes('goujon'))                   return 40;
+  if (d.includes('pepper'))                   return 67.5;
+  if (d.includes('karaage'))                  return 90;
+  if (d.includes('katsu'))                    return 80;
+  if (d.includes('upb'))                      return 80;
+  if (d.includes('duck') || d.includes('beef') || d.includes('pulled')) return 80;
+  if (d.includes('noodle') || d.includes('ramen')) return 100;
+  if (d.includes('chicken') || d.includes('shawarma') || d.includes('steam') ||
+      d.includes('shredded')|| d.includes('roasted') || d.includes('sliced') ||
+      d.includes('chili')   || d.includes('chilli')  ||
+      d.includes('smoky')   || d.includes('smokey'))  return 100;
+  return null;
+}
+
+// ── VALIDATION ─────────────────────────────────────────────────
+function onQtyInChange() {
+  const qty = parseFloat(document.getElementById('field-qty-in').value);
+  const max = getMaxLoad(scanned.itemDesc);
+  const el = document.getElementById('msg-maxload');
+  if (!max) { el.innerHTML = ''; return; }
+  if (isNaN(qty)) { el.innerHTML = `<div class="msg msg-info">Max load for this item: <strong>${max}kg</strong></div>`; return; }
+  if (qty > max) {
+    el.innerHTML = `<div class="msg msg-warn">⚠ ${qty}kg exceeds max load of ${max}kg — entry will still be saved</div>`;
+  } else {
+    el.innerHTML = `<div class="msg msg-ok">✓ Within max load (${max}kg)</div>`;
+  }
+}
+
+function onTempInChange() {
+  const t = parseFloat(document.getElementById('field-temp-in').value);
+  const inp = document.getElementById('field-temp-in');
+  const el = document.getElementById('msg-tempin');
+  if (isNaN(t)) { el.innerHTML=''; inp.className='form-input'; return; }
+  if (t > -15) {
+    el.innerHTML = `<div class="msg msg-warn">⚠ ${t}°C is above -15°C — product should be ≤ -15°C before defrost</div>`;
+    inp.className = 'form-input warn';
+  } else {
+    el.innerHTML = `<div class="msg msg-ok">✓ Temperature OK</div>`;
+    inp.className = 'form-input';
+  }
+}
+
+function onTempOutChange() {
+  const t = parseFloat(document.getElementById('field-temp-out').value);
+  const inp = document.getElementById('field-temp-out');
+  const el = document.getElementById('msg-tempout');
+  if (isNaN(t)) { el.innerHTML=''; inp.className='form-input'; return; }
+  if (t >= 5) {
+    el.innerHTML = `<div class="msg msg-err">⚠ ${t}°C must be below 5°C — please verify temperature</div>`;
+    inp.className = 'form-input err';
+  } else {
+    el.innerHTML = `<div class="msg msg-ok">✓ Within spec (&lt; 5°C)</div>`;
+    inp.className = 'form-input';
+  }
+}
+
+// ── SUBMIT ENTRY ───────────────────────────────────────────────
+async function submitEntry() {
+  const alertEl = document.getElementById('submit-alert');
+  alertEl.innerHTML = '';
+
+  // Validate
+  const errs = [];
+  if (!scanned.itemNo)             errs.push('GRN label must be scanned');
+  if (!v('field-date-in'))         errs.push('Date In is required');
+  if (!v('field-qty-in'))          errs.push('Quantity In is required');
+  if (!v('field-temp-in'))         errs.push('Temp before defrosting is required');
+  if (!v('field-time-in'))         errs.push('Defrost Start Time is required');
+  if (!v('field-program'))         errs.push('Program is required');
+  if (!v('field-emp-in'))          errs.push('Employee Name (In) is required');
+  if (!v('field-date-out'))        errs.push('Date Out is required');
+  if (!v('field-time-out'))        errs.push('End of Defrost Time is required');
+  if (!v('field-qty-out'))         errs.push('Quantity Out is required');
+  if (!v('field-temp-out'))        errs.push('Temp after defrosting is required');
+  if (!v('field-emp-out'))         errs.push('Employee Name (Out) is required');
+
+  if (errs.length) {
+    alertEl.innerHTML = `<div class="alert alert-err">⚠ <div><strong>Please fix:</strong><br>${errs.map(e=>'• '+e).join('<br>')}</div></div>`;
+    alertEl.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+
+  const entry = {
+    cabinetId:   currentCabinet.id,
+    cabinetName: currentCabinet.name,
+    itemNo:      scanned.itemNo,
+    itemDesc:    scanned.itemDesc,
+    lotNo:       scanned.lotNo,
+    dateIn:      v('field-date-in'),
+    qtyIn:       parseFloat(v('field-qty-in')),
+    tempIn:      parseFloat(v('field-temp-in')),
+    timeIn:      v('field-time-in'),
+    program:     v('field-program'),
+    empIn:       v('field-emp-in').trim(),
+    dateOut:     v('field-date-out'),
+    timeOut:     v('field-time-out'),
+    qtyOut:      parseFloat(v('field-qty-out')),
+    tempOut:     parseFloat(v('field-temp-out')),
+    empOut:      v('field-emp-out').trim(),
+    createdAtMs: Date.now(),
+    createdAt:   firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    await db.collection('thaw_entries').doc(currentCabinet.id)
+      .collection('records').add(entry);
+
+    document.getElementById('success-sub').textContent =
+      `${currentCabinet.name} · ${scanned.itemDesc || entry.itemNo}`;
+    showView('success');
+
+  } catch(err) {
+    console.error(err);
+    alertEl.innerHTML = `<div class="alert alert-err">❌ Save failed: ${err.message}<br>Check your internet connection and try again.</div>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Submit Entry';
+}
+
+function nextEntry() {
+  resetEntryForm();
+  showView('entry');
+}
+
+// ── LIVE SHEET ─────────────────────────────────────────────────
+function goLiveSheet() {
+  document.getElementById('live-select').value = '';
+  document.getElementById('live-content').style.display = 'none';
+  document.getElementById('live-empty').style.display = 'none';
+  document.getElementById('live-loading').style.display = 'none';
+  showView('live');
+}
+
+async function loadLive() {
+  const cabId = document.getElementById('live-select').value;
+  document.getElementById('live-content').style.display = 'none';
+  document.getElementById('live-empty').style.display = 'none';
+
+  if (!cabId) return;
+
+  document.getElementById('live-loading').style.display = 'block';
+
+  try {
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const snap = await db.collection('thaw_entries').doc(cabId)
+      .collection('records')
+      .orderBy('createdAtMs', 'desc')
+      .limit(200)
+      .get();
+
+    const entries = snap.docs.map(d => d.data())
+      .filter(e => e.createdAtMs >= cutoff);
+
+    document.getElementById('live-loading').style.display = 'none';
+
+    if (!entries.length) {
+      document.getElementById('live-empty').style.display = 'block';
+      return;
+    }
+
+    document.getElementById('live-count').textContent = `${entries.length} entr${entries.length===1?'y':'ies'}`;
+
+    const tbody = document.getElementById('live-tbody');
+    tbody.innerHTML = entries.map(e => `
+      <tr>
+        <td>${fmtDate(e.dateIn)}</td>
+        <td><strong>${e.itemNo||'–'}</strong></td>
+        <td style="min-width:140px;">${e.itemDesc||'–'}</td>
+        <td>${e.lotNo||'–'}</td>
+        <td>${e.qtyIn}kg</td>
+        <td class="${e.tempIn>-15?'temp-warn':'temp-ok'}">${e.tempIn}°C</td>
+        <td>${e.timeIn}</td>
+        <td><strong>${e.program}</strong></td>
+        <td>${e.empIn}</td>
+        <td>${fmtDate(e.dateOut)}</td>
+        <td>${e.timeOut}</td>
+        <td>${e.qtyOut}kg</td>
+        <td class="${e.tempOut>=5?'temp-bad':'temp-ok'}">${e.tempOut}°C</td>
+        <td>${e.empOut}</td>
+      </tr>`).join('');
+
+    document.getElementById('live-content').style.display = 'block';
+
+  } catch(err) {
+    document.getElementById('live-loading').style.display = 'none';
+    console.error(err);
+    toast('Error loading entries');
+  }
+}
+
+// ── EXCEL EXPORT ───────────────────────────────────────────────
+async function downloadExcel() {
+  const btn = document.getElementById('btn-download');
+  btn.textContent = '⏳ Generating…';
+  btn.disabled = true;
+
+  try {
+    const wb = XLSX.utils.book_new();
+
+    for (const cab of CABINETS) {
+      // Fetch all entries for this cabinet (sorted oldest first for Excel)
+      const snap = await db.collection('thaw_entries').doc(cab.id)
+        .collection('records')
+        .orderBy('createdAtMs', 'asc')
+        .get();
+
+      const entries = snap.docs.map(d => d.data());
+
+      // Header rows matching the template
+      const row1 = [
+        '', 'Document ID', '', 'Issue Date', 'Previous Issue Date', '',
+        'Issued By', 'Approved By', `Defrosting Record Tracker - ${cab.name}`,
+        '', '', '', 'Process Records'
+      ];
+      const row2 = [
+        '', 'QA140-8a', '', '26/02/2026', '16/01/2026', '',
+        'C. Andrade', 'P. Nathani', '', '', '', '', 'QA140-8a'
+      ];
+      const row3 = [
+        'Date', 'Item No.', 'Item Desc.', 'Lot No.', 'Quantity (Kg)',
+        'Temp of Product before defrosting (°C)', 'Defrost Start time (24hr Time)',
+        'Thaw Cabinet Programme Used', 'Employee Initials/Staff ID',
+        'End of Defrost Time   (24hr Time)', 'Date Out of Defrost Chiller',
+        'Quantity out of Defrost Chiller (Kg)', 'Temp After Defrosting < 5°C',
+        'Employee Initials/Staff ID',
+        '', 'TRO#', 'UBD (after defrost)',  // O, P, Q – left blank per columns A-N only
+      ];
+
+      const data = [row1, row2, row3];
+
+      entries.forEach(e => {
+        data.push([
+          fmtDateExcel(e.dateIn),   // A Date In
+          e.itemNo    || '',         // B Item No.
+          e.itemDesc  || '',         // C Item Desc.
+          e.lotNo     || '',         // D Lot No.
+          e.qtyIn,                   // E Quantity In
+          e.tempIn,                  // F Temp Before
+          e.timeIn    || '',         // G Defrost Start Time
+          e.program   || '',         // H Programme
+          e.empIn     || '',         // I Employee In
+          e.timeOut   || '',         // J End Defrost Time
+          fmtDateExcel(e.dateOut),  // K Date Out
+          e.qtyOut,                  // L Quantity Out
+          e.tempOut,                 // M Temp After
+          e.empOut    || '',         // N Employee Out
+          // O, P, Q – blank (TRO# and UBD filled manually in NAV)
+        ]);
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws['!cols'] = [
+        {wch:12},{wch:10},{wch:32},{wch:16},{wch:12},
+        {wch:22},{wch:18},{wch:16},{wch:18},
+        {wch:18},{wch:12},{wch:20},{wch:20},{wch:18},
+        {wch:5},{wch:10},{wch:16},
+      ];
+      XLSX.utils.book_append_sheet(wb, ws, cab.sheetName);
+    }
+
+    const filename = `Thaw_Cabinet_Records_${fmtDateFile(new Date())}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    toast('Excel downloaded ✓');
+
+  } catch(err) {
+    console.error(err);
+    toast('Error generating Excel');
+  }
+
+  btn.textContent = '⬇️ Download Full Excel';
+  btn.disabled = false;
+}
+
+// ── HELPERS ────────────────────────────────────────────────────
+function v(id)          { return (document.getElementById(id)?.value || '').trim(); }
+function toInputDate(d) { return d.toISOString().split('T')[0]; }
+function fmtDate(s)     { if(!s) return '–'; const [y,m,d]=s.split('-'); return `${d}/${m}/${y}`; }
+function fmtDateExcel(s){ if(!s) return ''; const [y,m,d]=s.split('-'); return `${d}/${m}/${y}`; }
+function fmtDateFile(d) { return d.toISOString().split('T')[0].replace(/-/g,''); }
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
