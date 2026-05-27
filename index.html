@@ -353,22 +353,7 @@
   </div>
   <div class="content" style="padding-top:20px;">
 
-    <!-- QR Scan option -->
-    <button class="scan-cfg-btn" onclick="triggerCfgScan()">
-      <span style="font-size:24px;">📷</span>
-      <span>
-        <span style="display:block;">Scan Config QR Code</span>
-        <span style="font-size:12px; font-weight:500; opacity:0.75;">Already set up another device? Scan its QR code</span>
-      </span>
-    </button>
-    <input type="file" id="cfg-camera-input" accept="image/*" capture="environment" style="display:none;" onchange="handleCfgScan(event)">
     <div id="cfg-scan-status" style="margin-bottom:12px;"></div>
-
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
-      <div style="flex:1; height:1px; background:var(--border);"></div>
-      <div style="font-size:12px; color:var(--text3); font-weight:600;">OR ENTER MANUALLY</div>
-      <div style="flex:1; height:1px; background:var(--border);"></div>
-    </div>
 
     <div class="card">
       <div class="cfg-section">Anthropic API</div>
@@ -717,8 +702,8 @@
 <!-- QR Modal -->
 <div class="qr-modal-overlay" id="qr-modal">
   <div class="qr-modal">
-    <h3>📱 Config QR Code</h3>
-    <p>Open the app on a new device, tap <strong>"Scan Config QR Code"</strong>, then scan this code. All settings will be filled in automatically.</p>
+    <h3>📱 Add New Device</h3>
+    <p>On the new device, open the <strong>phone camera</strong> (no app needed) and point it at this QR code. It will open the app with all settings pre-filled automatically.</p>
     <div id="qr-canvas"></div>
     <button class="btn btn-ghost" onclick="closeQR()" style="min-height:44px; font-size:15px;">Close</button>
   </div>
@@ -764,6 +749,9 @@ let scanned = {itemNo:'', itemDesc:'', lotNo:''};
 document.addEventListener('DOMContentLoaded', () => {
   buildCabinetGrids();
   buildLiveDropdown();
+
+  // First check if URL contains config from QR scan
+  if (checkUrlConfig()) return;
 
   const savedCfg = localStorage.getItem('thaw_cfg');
   if (savedCfg) {
@@ -1346,24 +1334,28 @@ async function downloadExcel() {
   btn.disabled = false;
 }
 
-// ── CONFIG QR CODE ─────────────────────────────────────────────
+// ── CONFIG QR CODE (URL-based) ─────────────────────────────────
 function showCfgQR() {
   if (!cfg.anthropicKey) { toast('No config saved yet'); return; }
 
-  // Build compact config payload
-  const payload = JSON.stringify({
+  // Encode config as base64 and append to app URL as a parameter
+  const payload = {
     a: cfg.anthropicKey,
     f: cfg.fbConfig,
     t: localStorage.getItem('thaw_teams_url') || ''
-  });
+  };
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+
+  // Build the full URL — when scanned, phone opens app with config pre-filled
+  const appUrl = window.location.origin + window.location.pathname + '?cfg=' + encoded;
 
   // Clear previous QR
   const canvas = document.getElementById('qr-canvas');
   canvas.innerHTML = '';
 
-  // Generate QR code
+  // Generate QR code encoding the full URL
   new QRCode(canvas, {
-    text: payload,
+    text: appUrl,
     width: 240,
     height: 240,
     colorDark: '#111111',
@@ -1384,82 +1376,38 @@ document.getElementById('qr-modal').addEventListener('click', function(e) {
   if (e.target === this) closeQR();
 });
 
-// ── SCAN CONFIG QR (on new device) ────────────────────────────
-function triggerCfgScan() {
-  document.getElementById('cfg-camera-input').click();
-}
-
-async function handleCfgScan(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  e.target.value = '';
-
-  const statusEl = document.getElementById('cfg-scan-status');
-  statusEl.innerHTML = '<div class="scan-loading"><div class="spinner"></div><span>Reading QR code...</span></div>';
+// ── AUTO-LOAD CONFIG FROM URL PARAM ───────────────────────────
+// Called on page load — if URL contains ?cfg=... (from QR scan),
+// decode and save config automatically, then launch app
+function checkUrlConfig() {
+  const params = new URLSearchParams(window.location.search);
+  const encoded = params.get('cfg');
+  if (!encoded) return false;
 
   try {
-    const b64 = await fileToB64(file);
+    const decoded = decodeURIComponent(escape(atob(encoded)));
+    const parsed = JSON.parse(decoded);
 
-    // Use Anthropic API to read QR code content
-    // We need a temporary API call but we don't have the key yet...
-    // Instead, use a canvas-based QR decoder approach via the image
-    // Since we can't decode QR without a library, we'll use Anthropic vision
-    // But we need the key first — chicken and egg problem.
-    // Solution: ask user to use a free QR scanner app to get the text, OR
-    // we embed a lightweight QR decoder.
-
-    // Use jsQR via dynamic import workaround - load it inline
-    statusEl.innerHTML = '<div class="scan-loading"><div class="spinner"></div><span>Decoding QR...</span></div>';
-
-    const img = new Image();
-    img.onload = async () => {
-      const cvs = document.createElement('canvas');
-      cvs.width = img.width; cvs.height = img.height;
-      const ctx = cvs.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, cvs.width, cvs.height);
-
-      // Load jsQR dynamically
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
-      script.onload = () => {
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (code && code.data) {
-          applyScannedCfg(code.data, statusEl);
-        } else {
-          statusEl.innerHTML = '<div class="msg msg-err">✗ Could not read QR code. Make sure the full QR code is visible and well-lit, then try again.</div>';
-        }
-      };
-      script.onerror = () => {
-        statusEl.innerHTML = '<div class="msg msg-err">✗ QR decoder failed to load. Check internet connection.</div>';
-      };
-      document.head.appendChild(script);
-    };
-
-    img.src = 'data:image/jpeg;base64,' + b64;
-
-  } catch(err) {
-    console.error(err);
-    statusEl.innerHTML = `<div class="msg msg-err">✗ Error: ${err.message}</div>`;
-  }
-}
-
-function applyScannedCfg(rawText, statusEl) {
-  try {
-    const parsed = JSON.parse(rawText);
-    if (!parsed.a || !parsed.f || !parsed.f.projectId) throw new Error('Invalid QR data');
+    if (!parsed.a || !parsed.f || !parsed.f.projectId) throw new Error('Invalid');
 
     cfg = { anthropicKey: parsed.a, fbConfig: parsed.f };
     localStorage.setItem('thaw_cfg', JSON.stringify(cfg));
     if (parsed.t) localStorage.setItem('thaw_teams_url', parsed.t);
 
-    statusEl.innerHTML = '<div class="msg msg-ok">✓ Config loaded from QR!</div>';
+    // Clean URL (remove ?cfg= param)
+    window.history.replaceState({}, '', window.location.pathname);
+
+    // Show success message briefly then launch
+    const statusEl = document.getElementById('cfg-scan-status');
+    if (statusEl) statusEl.innerHTML = '<div class="alert alert-ok">✓ Config loaded! Launching...</div>';
 
     initFirebase();
-    setTimeout(() => showView('home'), 800);
+    setTimeout(() => showView('home'), 900);
+    return true;
 
-  } catch(err) {
-    statusEl.innerHTML = '<div class="msg msg-err">✗ Invalid QR code — make sure you scanned the correct config QR from the app.</div>';
+  } catch(e) {
+    console.error('URL config parse error:', e);
+    return false;
   }
 }
 
