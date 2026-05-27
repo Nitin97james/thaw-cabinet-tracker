@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     :root {
       --red: #CC0000;
@@ -306,7 +307,33 @@
     .tag-blue  { background: var(--blue-light); color: var(--blue); }
     .tag-green { background: var(--green-light); color: var(--green); }
 
-    /* ── MISC ─────────────────────────────────── */
+    /* ── QR MODAL ─────────────────────────────── */
+    .qr-modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6); z-index: 300;
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .qr-modal-overlay.open { display: flex; }
+    .qr-modal {
+      background: #fff; border-radius: 20px;
+      padding: 28px 24px; width: 100%; max-width: 340px;
+      text-align: center; box-shadow: var(--shadow-lg);
+    }
+    .qr-modal h3 { font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+    .qr-modal p  { font-size: 13px; color: var(--text2); margin-bottom: 20px; line-height: 1.4; }
+    #qr-canvas   { margin: 0 auto 20px; }
+    #qr-canvas img, #qr-canvas canvas { border-radius: 8px; }
+
+    /* ── SCAN CONFIG ──────────────────────────── */
+    .scan-cfg-btn {
+      background: var(--blue-light); border: 2px solid #93C5FD;
+      color: var(--blue); border-radius: var(--radius);
+      padding: 14px 20px; display: flex; align-items: center;
+      gap: 10px; cursor: pointer; width: 100%; font-family: inherit;
+      font-size: 15px; font-weight: 700; min-height: 52px;
+      margin-bottom: 14px; transition: all 0.12s;
+    }
+    .scan-cfg-btn:active { background: #DBEAFE; transform: scale(0.98); }
     .gap-sm  { height: 10px; }
     .gap-md  { height: 18px; }
     .footer-note { text-align: center; font-size: 12px; color: var(--text3); padding-top: 8px; }
@@ -322,9 +349,26 @@
   <div class="setup-hero">
     <div class="setup-icon">🧊</div>
     <div class="setup-title">Thaw Cabinet Tracker</div>
-    <div class="setup-sub">Enter configuration to get started</div>
+    <div class="setup-sub">Set up this device to get started</div>
   </div>
   <div class="content" style="padding-top:20px;">
+
+    <!-- QR Scan option -->
+    <button class="scan-cfg-btn" onclick="triggerCfgScan()">
+      <span style="font-size:24px;">📷</span>
+      <span>
+        <span style="display:block;">Scan Config QR Code</span>
+        <span style="font-size:12px; font-weight:500; opacity:0.75;">Already set up another device? Scan its QR code</span>
+      </span>
+    </button>
+    <input type="file" id="cfg-camera-input" accept="image/*" capture="environment" style="display:none;" onchange="handleCfgScan(event)">
+    <div id="cfg-scan-status" style="margin-bottom:12px;"></div>
+
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+      <div style="flex:1; height:1px; background:var(--border);"></div>
+      <div style="font-size:12px; color:var(--text3); font-weight:600;">OR ENTER MANUALLY</div>
+      <div style="flex:1; height:1px; background:var(--border);"></div>
+    </div>
 
     <div class="card">
       <div class="cfg-section">Anthropic API</div>
@@ -659,7 +703,24 @@
 
     <div class="divider"></div>
     <button class="btn btn-primary" onclick="saveSettings()" style="margin-bottom:10px;">Save Settings</button>
+
+    <div class="divider"></div>
+    <div style="font-size:13px; font-weight:700; color:var(--text2); margin-bottom:10px;">📱 Add New Device</div>
+    <div style="font-size:13px; color:var(--text2); margin-bottom:12px; line-height:1.4;">Generate a QR code for new devices. Scan it to set up instantly — no typing needed.</div>
+    <button class="btn btn-outline" onclick="showCfgQR()" style="margin-bottom:10px;">📷 Show Config QR Code</button>
+
+    <div class="divider"></div>
     <button class="btn btn-ghost" onclick="doResetConfig()" style="font-size:14px; min-height:42px; color:var(--text3);">Reset Config (Re-setup)</button>
+  </div>
+</div>
+
+<!-- QR Modal -->
+<div class="qr-modal-overlay" id="qr-modal">
+  <div class="qr-modal">
+    <h3>📱 Config QR Code</h3>
+    <p>Open the app on a new device, tap <strong>"Scan Config QR Code"</strong>, then scan this code. All settings will be filled in automatically.</p>
+    <div id="qr-canvas"></div>
+    <button class="btn btn-ghost" onclick="closeQR()" style="min-height:44px; font-size:15px;">Close</button>
   </div>
 </div>
 
@@ -1285,7 +1346,123 @@ async function downloadExcel() {
   btn.disabled = false;
 }
 
-// ── HELPERS ────────────────────────────────────────────────────
+// ── CONFIG QR CODE ─────────────────────────────────────────────
+function showCfgQR() {
+  if (!cfg.anthropicKey) { toast('No config saved yet'); return; }
+
+  // Build compact config payload
+  const payload = JSON.stringify({
+    a: cfg.anthropicKey,
+    f: cfg.fbConfig,
+    t: localStorage.getItem('thaw_teams_url') || ''
+  });
+
+  // Clear previous QR
+  const canvas = document.getElementById('qr-canvas');
+  canvas.innerHTML = '';
+
+  // Generate QR code
+  new QRCode(canvas, {
+    text: payload,
+    width: 240,
+    height: 240,
+    colorDark: '#111111',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+
+  closeSettings();
+  document.getElementById('qr-modal').classList.add('open');
+}
+
+function closeQR() {
+  document.getElementById('qr-modal').classList.remove('open');
+}
+
+// Close QR modal on overlay click
+document.getElementById('qr-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeQR();
+});
+
+// ── SCAN CONFIG QR (on new device) ────────────────────────────
+function triggerCfgScan() {
+  document.getElementById('cfg-camera-input').click();
+}
+
+async function handleCfgScan(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  const statusEl = document.getElementById('cfg-scan-status');
+  statusEl.innerHTML = '<div class="scan-loading"><div class="spinner"></div><span>Reading QR code...</span></div>';
+
+  try {
+    const b64 = await fileToB64(file);
+
+    // Use Anthropic API to read QR code content
+    // We need a temporary API call but we don't have the key yet...
+    // Instead, use a canvas-based QR decoder approach via the image
+    // Since we can't decode QR without a library, we'll use Anthropic vision
+    // But we need the key first — chicken and egg problem.
+    // Solution: ask user to use a free QR scanner app to get the text, OR
+    // we embed a lightweight QR decoder.
+
+    // Use jsQR via dynamic import workaround - load it inline
+    statusEl.innerHTML = '<div class="scan-loading"><div class="spinner"></div><span>Decoding QR...</span></div>';
+
+    const img = new Image();
+    img.onload = async () => {
+      const cvs = document.createElement('canvas');
+      cvs.width = img.width; cvs.height = img.height;
+      const ctx = cvs.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, cvs.width, cvs.height);
+
+      // Load jsQR dynamically
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+      script.onload = () => {
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code && code.data) {
+          applyScannedCfg(code.data, statusEl);
+        } else {
+          statusEl.innerHTML = '<div class="msg msg-err">✗ Could not read QR code. Make sure the full QR code is visible and well-lit, then try again.</div>';
+        }
+      };
+      script.onerror = () => {
+        statusEl.innerHTML = '<div class="msg msg-err">✗ QR decoder failed to load. Check internet connection.</div>';
+      };
+      document.head.appendChild(script);
+    };
+
+    img.src = 'data:image/jpeg;base64,' + b64;
+
+  } catch(err) {
+    console.error(err);
+    statusEl.innerHTML = `<div class="msg msg-err">✗ Error: ${err.message}</div>`;
+  }
+}
+
+function applyScannedCfg(rawText, statusEl) {
+  try {
+    const parsed = JSON.parse(rawText);
+    if (!parsed.a || !parsed.f || !parsed.f.projectId) throw new Error('Invalid QR data');
+
+    cfg = { anthropicKey: parsed.a, fbConfig: parsed.f };
+    localStorage.setItem('thaw_cfg', JSON.stringify(cfg));
+    if (parsed.t) localStorage.setItem('thaw_teams_url', parsed.t);
+
+    statusEl.innerHTML = '<div class="msg msg-ok">✓ Config loaded from QR!</div>';
+
+    initFirebase();
+    setTimeout(() => showView('home'), 800);
+
+  } catch(err) {
+    statusEl.innerHTML = '<div class="msg msg-err">✗ Invalid QR code — make sure you scanned the correct config QR from the app.</div>';
+  }
+}
+
 function v(id)          { return (document.getElementById(id)?.value || '').trim(); }
 function toInputDate(d) { return d.toISOString().split('T')[0]; }
 function fmtDate(s)     { if(!s) return '–'; const [y,m,d]=s.split('-'); return `${d}/${m}/${y}`; }
